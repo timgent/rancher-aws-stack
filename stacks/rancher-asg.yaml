@@ -1,0 +1,51 @@
+---
+name: {{ env }}-rancher-server-asg
+tags:
+  - key: Project
+    value: step-by-step
+
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: RancherOS Server ASG in {{ env }} environment
+Resources:
+  ASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AvailabilityZones:
+      {% for n in range(vpc_subnets|count) %}
+        - Fn::Select:
+          - '{{ n }}'
+          - Fn::GetAZs: ''
+      {% endfor -%}
+      LaunchConfigurationName:
+        Ref: LaunchConfiguration
+      VPCZoneIdentifier:
+      {% for n in range(vpc_subnets|count) %}
+        - {{ get_stack_resource(cf_conn, env + '-vpc', 'Subnet' + n|string) }}
+      {% endfor -%}
+      TerminationPolicies:
+        - 'OldestInstance'
+        - 'Default'
+      MaxSize: 1
+      MinSize: 1
+      Tags:
+        - Key: Name
+          Value: {{ env }}-rancher-server
+          PropagateAtLaunch: true
+        - Key: Env
+          Value: {{ env }}
+          PropagateAtLaunch: true
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        PauseTime: PT1S
+
+  LaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      AssociatePublicIpAddress: true
+      ImageId: {{ get_ami_id(ec2_conn, ami_name) }}
+      KeyName: {{ ssh_key_name }}
+      InstanceMonitoring: false
+      InstanceType: {{ instance_type }}
+      SecurityGroups:
+        - {{ get_stack_resource(cf_conn, env + '-vpc', 'DefaultSG') }}
