@@ -49,3 +49,13 @@ Resources:
       InstanceType: {{ instance_type }}
       SecurityGroups:
         - {{ get_stack_resource(cf_conn, env + '-vpc', 'DefaultSG') }}
+      UserData:
+        'Fn::Base64': |
+          #cloud-config
+          rancher:
+            services:
+              rancherserver:
+                image: rancher/server
+                restart: always
+                ports:
+                  - "8080:8080"
