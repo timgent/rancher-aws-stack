@@ -50,7 +50,7 @@ Resources:
       InstanceMonitoring: false
       InstanceType: {{ instance_type }}
       SecurityGroups:
-        - {{ get_stack_resource(cf_conn, env + '-vpc', 'DefaultSG') }}
+        - {{ get_stack_resource(cf_conn, env + '-vpc', 'RancherServerSG') }}
       UserData:
         'Fn::Base64': |
           #cloud-config

@@ -45,7 +45,7 @@ Resources:
         Ref: RancherServerSG
       IpProtocol: -1
       SourceSecurityGroupId:
-        Ref: DefaultSG
+        Ref: RancherServerSG
       FromPort: -1
       ToPort: -1
   # Allow traffic from ELB
@@ -53,7 +53,7 @@ Resources:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
       GroupId:
-        Ref: DefaultSG
+        Ref: RancherServerSG
       IpProtocol: tcp
       SourceSecurityGroupId:
         Ref: RancherElbSG
