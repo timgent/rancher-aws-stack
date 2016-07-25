@@ -2,7 +2,7 @@
 name: {{ env }}-rancher-server-asg
 tags:
   - key: Project
-    value: step-by-step
+    value: rancher
 
 ---
 AWSTemplateFormatVersion: '2010-09-09'
@@ -11,6 +11,8 @@ Resources:
   ASG:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
+      LoadBalancerNames:
+        - Ref: RancherELB
       AvailabilityZones:
       {% for n in range(vpc_subnets|count) %}
         - Fn::Select:
@@ -59,3 +61,24 @@ Resources:
                 restart: always
                 ports:
                   - "8080:8080"
+
+  RancherELB:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      Subnets:
+      {% for n in range(vpc_subnets|count) %}
+        - {{ get_stack_resource(cf_conn, env + '-vpc', 'Subnet' + n|string) }}
+      {% endfor -%}
+      SecurityGroups:
+        - {{ get_stack_resource(cf_conn, env + '-vpc', 'RancherElbSG') }}
+      CrossZone: "true"
+      Listeners:
+        - LoadBalancerPort: 80
+          InstancePort: 8080
+          Protocol: HTTP
+      HealthCheck:
+        Target: "HTTP:8080/"
+        HealthyThreshold: "3"
+        UnhealthyThreshold: "5"
+        Interval: "30"
+        Timeout: "5"

@@ -1,5 +1,8 @@
 ---
 name: {{ env }}-vpc
+tags:
+  - key: Project
+    value: rancher
 
 ---
 AWSTemplateFormatVersion: '2010-09-09'
@@ -18,7 +21,7 @@ Resources:
       - Key: Env
         Value: {{ env }}
   
-  DefaultSG:
+  RancherServerSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
       VpcId:
@@ -35,16 +38,27 @@ Resources:
         - Key: Env
           Value: {{ env }}
   # Allow traffic within subnets
-  AllTrafficSGIn:
+  AllTrafficDefaultSGIn:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
       GroupId:
-        Ref: DefaultSG
+        Ref: RancherServerSG
       IpProtocol: -1
       SourceSecurityGroupId:
         Ref: DefaultSG
       FromPort: -1
       ToPort: -1
+  # Allow traffic from ELB
+  HttpTrafficDefaultSGIn:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId:
+        Ref: DefaultSG
+      IpProtocol: tcp
+      SourceSecurityGroupId:
+        Ref: RancherElbSG
+      FromPort: 8080
+      ToPort: 8080
 
 # Create a subnet in each AZ
 {% for n in vpc_subnets %}
@@ -110,3 +124,23 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId:
         Ref: InternetGateway
+
+  RancherElbSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: { Ref: VpcRancher }
+      GroupDescription: Enable HTTP access
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+          FromPort: 80
+          ToPort: 80
+        - IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+          FromPort: 443
+          ToPort: 443
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          FromPort: -1
+          ToPort: -1
