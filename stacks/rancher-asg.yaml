@@ -1,0 +1,105 @@
+---
+name: {{ env }}-rancher-server-asg
+tags:
+  - key: Project
+    value: rancher
+
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: RancherOS Server ASG in {{ env }} environment
+Resources:
+  ASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LoadBalancerNames:
+        - Ref: RancherELB
+      AvailabilityZones:
+      {% for n in range(vpc_subnets|count) %}
+        - Fn::Select:
+          - '{{ n }}'
+          - Fn::GetAZs: ''
+      {% endfor -%}
+      LaunchConfigurationName:
+        Ref: LaunchConfiguration
+      VPCZoneIdentifier:
+      {% for n in range(vpc_subnets|count) %}
+        - {{ get_stack_resource(cf_conn, env + '-vpc', 'Subnet' + n|string) }}
+      {% endfor -%}
+      TerminationPolicies:
+        - 'OldestInstance'
+        - 'Default'
+      MaxSize: 1
+      MinSize: 1
+      Tags:
+        - Key: Name
+          Value: {{ env }}-rancher-server
+          PropagateAtLaunch: true
+        - Key: Env
+          Value: {{ env }}
+          PropagateAtLaunch: true
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        PauseTime: PT1S
+
+  LaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      AssociatePublicIpAddress: true
+      ImageId: {{ get_ami_id(ec2_conn, ami_name) }}
+      KeyName: {{ ssh_key_name }}
+      InstanceMonitoring: false
+      InstanceType: {{ instance_type }}
+      SecurityGroups:
+        - {{ get_stack_resource(cf_conn, env + '-vpc', 'RancherServerSG') }}
+      UserData:
+        'Fn::Base64': |
+          #cloud-config
+          rancher:
+            services:
+              rancherserver:
+                image: rancher/server
+                restart: always
+                ports:
+                  - "8080:8080"
+
+  RancherELB:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      Subnets:
+      {% for n in range(vpc_subnets|count) %}
+        - {{ get_stack_resource(cf_conn, env + '-vpc', 'Subnet' + n|string) }}
+      {% endfor -%}
+      SecurityGroups:
+        - {{ get_stack_resource(cf_conn, env + '-vpc', 'RancherElbSG') }}
+      CrossZone: "true"
+      Listeners:
+        - LoadBalancerPort: 443
+          InstancePort: 8080
+          Protocol: HTTPS
+          SSLCertificateId: {{ ssl_cert_arn }}
+      HealthCheck:
+        Target: "HTTP:8080/"
+        HealthyThreshold: "3"
+        UnhealthyThreshold: "5"
+        Interval: "30"
+        Timeout: "5"
+
+#----------------------------#
+#---------DNS Setup----------#
+#----------------------------#
+  RancherELBDNS:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneName: {{ dns_zone_name }}.
+      RecordSets:
+        - Name: rancher.{{ dns_zone_name }}
+          Type: A
+          AliasTarget:
+            HostedZoneId:
+              'Fn::GetAtt':
+                - RancherELB
+                - CanonicalHostedZoneNameID
+            DNSName:
+              'Fn::GetAtt':
+                - RancherELB
+                - CanonicalHostedZoneName

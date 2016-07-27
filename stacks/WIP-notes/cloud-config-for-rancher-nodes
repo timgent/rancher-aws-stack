@@ -1,0 +1,9 @@
+#cloud-config
+rancher:
+  services:
+    register:
+      privileged: true
+      volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      image: rancher/agent
+      command: <url from rancher server has to go here>

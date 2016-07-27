@@ -1,0 +1,64 @@
+---
+name: {{ env }}-test-stack
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Testing various stuff out....
+Resources:
+  RancherServerSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId:
+        Ref: VpcRancher
+      GroupDescription: {{ env }}-vpc Default SG
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          FromPort: -1
+          ToPort: -1
+      Tags:
+        - Key: Name
+          Value: {{ env }}-default
+        - Key: Env
+          Value: {{ env }}
+  # Allow traffic within subnets
+  AllTrafficDefaultSGIn:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId:
+        Ref: RancherServerSG
+      IpProtocol: -1
+      SourceSecurityGroupId:
+        Ref: RancherServerSG
+      FromPort: -1
+      ToPort: -1
+  # Allow traffic from ELB
+  HttpTrafficDefaultSGIn:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId:
+        Ref: DefaultSG
+      IpProtocol: tcp
+      SourceSecurityGroupId:
+        Ref: RancherElbSG
+      FromPort: 8080
+      ToPort: 8080
+
+  RancherElbSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: { Ref: VpcRancher }
+      GroupDescription: Enable HTTP access
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+          FromPort: 80
+          ToPort: 80
+        - IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+          FromPort: 443
+          ToPort: 443
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          FromPort: -1
+          ToPort: -1

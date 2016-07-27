@@ -1,0 +1,146 @@
+---
+name: {{ env }}-vpc
+tags:
+  - key: Project
+    value: rancher
+
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: VPC for non-HA deploy of rancher server
+Resources:
+  VpcRancher:
+  # VPC for all rancher resources
+    Type: "AWS::EC2::VPC"
+    Properties:
+      CidrBlock: {{ vpc_cidr }}
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+      - Key: Name
+        Value: {{ vpc_name }}
+      - Key: Env
+        Value: {{ env }}
+  
+  RancherServerSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId:
+        Ref: VpcRancher
+      GroupDescription: {{ env }}-vpc Default SG
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          FromPort: -1
+          ToPort: -1
+      Tags:
+        - Key: Name
+          Value: {{ env }}-default
+        - Key: Env
+          Value: {{ env }}
+  # Allow traffic within subnets
+  AllTrafficDefaultSGIn:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId:
+        Ref: RancherServerSG
+      IpProtocol: -1
+      SourceSecurityGroupId:
+        Ref: RancherServerSG
+      FromPort: -1
+      ToPort: -1
+  # Allow traffic from ELB
+  HttpTrafficDefaultSGIn:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId:
+        Ref: RancherServerSG
+      IpProtocol: tcp
+      SourceSecurityGroupId:
+        Ref: RancherElbSG
+      FromPort: 8080
+      ToPort: 8080
+
+# Create a subnet in each AZ
+{% for n in vpc_subnets %}
+  Subnet{{ loop.index0 }}:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - '{{ loop.index0 }}'
+          - Fn::GetAZs: ''
+      VpcId:
+        Ref: VpcRancher
+      CidrBlock: {{ n }}
+      Tags:
+      - Key: Name
+        Value: {{ env }}-az{{ loop.index0 }}
+      - Key: Env
+        Value: {{ env }}
+
+  SubnetRouteTableAssociation{{ loop.index0 }}:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: Subnet{{ loop.index0 }}
+      RouteTableId:
+        Ref: RouteTable
+{%- endfor %}
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: {{ env }}-igw
+        - Key: Env
+          Value: {{ env }}
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: VpcRancher
+      InternetGatewayId:
+        Ref: InternetGateway
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VpcRancher
+      Tags:
+        - Key: Name
+          Value: {{ env }}-default-routetable
+        - Key: Env
+          Value: {{ env }}
+
+  Route:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId:
+        Ref: RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: InternetGateway
+
+  RancherElbSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: { Ref: VpcRancher }
+      GroupDescription: Enable HTTP access
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+          FromPort: 80
+          ToPort: 80
+        - IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+          FromPort: 443
+          ToPort: 443
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          FromPort: -1
+          ToPort: -1
