@@ -78,7 +78,7 @@ Resources:
           Protocol: HTTPS
           SSLCertificateId: {{ ssl_cert_arn }}
       HealthCheck:
-        Target: "HTTP:8080/"
+        Target: "HTTP:8080/health"
         HealthyThreshold: "3"
         UnhealthyThreshold: "5"
         Interval: "30"
