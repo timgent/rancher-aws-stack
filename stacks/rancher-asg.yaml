@@ -73,12 +73,33 @@ Resources:
         - {{ get_stack_resource(cf_conn, env + '-vpc', 'RancherElbSG') }}
       CrossZone: "true"
       Listeners:
-        - LoadBalancerPort: 80
+        - LoadBalancerPort: 443
           InstancePort: 8080
-          Protocol: HTTP
+          Protocol: HTTPS
+          SSLCertificateId: {{ ssl_cert_arn }}
       HealthCheck:
         Target: "HTTP:8080/"
         HealthyThreshold: "3"
         UnhealthyThreshold: "5"
         Interval: "30"
         Timeout: "5"
+
+#----------------------------#
+#---------DNS Setup----------#
+#----------------------------#
+  RancherELBDNS:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneName: {{ dns_zone_name }}.
+      RecordSets:
+        - Name: rancher.{{ dns_zone_name }}
+          Type: A
+          AliasTarget:
+            HostedZoneId:
+              'Fn::GetAtt':
+                - RancherELB
+                - CanonicalHostedZoneNameID
+            DNSName:
+              'Fn::GetAtt':
+                - RancherELB
+                - CanonicalHostedZoneName
